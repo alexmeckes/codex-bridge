@@ -1,0 +1,6 @@
+{
+  "name": "codex-bridge",
+  "version": "0.1.2",
+  "description": "Lets Claude delegate tasks to OpenAI Codex, including Codex Computer Use, through the Codex app server.",
+  "author": { "name": "Alex" }
+}

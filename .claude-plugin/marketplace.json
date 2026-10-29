@@ -1,0 +1,5 @@
+{
+  "name": "codex-bridge",
+  "owner": { "name": "Alex" },
+  "plugins": [{ "name": "codex-bridge", "source": "./" }]
+}
