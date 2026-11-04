@@ -42,7 +42,10 @@ The tool takes:
 | `prompt` | The task for Codex (required). |
 | `threadId` | Continue an earlier Codex thread. |
 | `cwd` | Codex's working directory; defaults to the session's. |
+| `model` | A Codex model id. New threads default to `gpt-6.1-terra`; a continued thread keeps its model unless you name one. |
 | `approvals` | `decline` (default) or `accept`: how to answer Codex's approval asks, such as Computer Use's per-app access. |
+
+New threads all go in one Codex project, **Claude Code**, created if it's missing. A renamed project stops matching, so the next thread creates a new one.
 
 ## Approvals
 

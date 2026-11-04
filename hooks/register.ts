@@ -25,6 +25,7 @@ export const register: Register = on => {
           prompt: { type: 'string', description: 'The task for Codex, self-contained.' },
           threadId: { type: 'string', description: 'Continue this Codex thread instead of starting a new one.' },
           cwd: { type: 'string', description: "Codex's working directory; defaults to this session's." },
+          model: { type: 'string', description: 'A Codex model id; new threads default to gpt-6.1-terra.' },
           approvals: {
             type: 'string',
             enum: ['decline', 'accept'],
@@ -38,13 +39,14 @@ export const register: Register = on => {
   })
 
   on('tool.call', { tool: TOOL }, async ($, e) => {
-    const { prompt, threadId, cwd, approvals } = e as unknown as {
+    const { prompt, threadId, cwd, model, approvals } = e as unknown as {
       prompt: string
       threadId?: string
       cwd?: string
+      model?: string
       approvals?: string
     }
-    const request = { prompt, threadId, cwd: cwd ?? (await $.session.root()), approvals }
+    const request = { prompt, threadId, cwd: cwd ?? (await $.session.root()), model, approvals }
     const log: string[] = []
     let done: Extract<BridgeLine, { type: 'done' }> | undefined
     let buffer = ''

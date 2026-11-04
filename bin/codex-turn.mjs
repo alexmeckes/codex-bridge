@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 // Runs one Codex turn through `codex app-server` (JSON-RPC over stdio).
-// stdin: {"prompt", "threadId"?, "cwd"?, "model"?, "approvals"?: "decline" | "accept"}
+// stdin: {"prompt", "threadId"?, "cwd"?, "model"? (default gpt-6.1-terra), "approvals"?: "decline" | "accept"}
 // stdout: JSON lines — {"type":"progress","text"} while working, then {"type":"done",...}.
 import { spawn } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { createInterface } from 'node:readline'
 
 const req = JSON.parse(await new Promise(r => { let s = ''; process.stdin.on('data', d => (s += d)).on('end', () => r(s)) }))
 const out = o => process.stdout.write(JSON.stringify(o) + '\n')
+const PROJECT = 'Claude Code'
 const debug = process.env.CODEX_BRIDGE_DEBUG === '1'
 
 const server = spawn(process.env.CODEX_BIN || 'codex', ['app-server'], { stdio: ['pipe', 'pipe', 'inherit'] })
@@ -70,15 +72,32 @@ createInterface({ input: server.stdout }).on('line', line => {
   if (method === 'error') out({ type: 'progress', text: `error: ${params.error?.message ?? JSON.stringify(params)}` })
 })
 
+// Every new thread lands in one project, found by name and created if it's missing.
+async function projectId() {
+  let cursor = null
+  do {
+    const page = await call('project/list', { cursor, limit: 200 })
+    const found = page.data.find(p => p.name === PROJECT)
+    if (found) return found.id
+    cursor = page.nextCursor
+  } while (cursor)
+  const { project } = await call('project/create', { name: PROJECT, roots: [], idempotencyKey: randomUUID() })
+  return project.id
+}
+
 try {
-  await call('initialize', { clientInfo: { name: 'claude-codex-bridge', title: 'Claude Code', version: '0.1.0' }, capabilities: null })
+  await call('initialize', { clientInfo: { name: 'claude-codex-bridge', title: 'Claude Code', version: '0.1.0' }, capabilities: { experimentalApi: true, requestAttestation: false } })
   send({ method: 'initialized' })
-  const threadParams = { cwd: req.cwd ?? process.cwd(), ...(req.model && { model: req.model }) }
-  const started = req.threadId
-    ? await call('thread/resume', { threadId: req.threadId, ...threadParams })
-    : await call('thread/start', threadParams)
+  const cwd = req.cwd ?? process.cwd()
+  let started
+  if (req.threadId) {
+    // A resumed thread keeps its own model and project unless a model is named.
+    started = await call('thread/resume', { threadId: req.threadId, cwd, ...(req.model && { model: req.model }) })
+  } else {
+    started = await call('thread/start', { cwd, model: req.model ?? 'gpt-6.1-terra', projectId: await projectId() })
+  }
   threadId = started.thread.id
-  out({ type: 'progress', text: `thread ${threadId}` })
+  out({ type: 'progress', text: `thread ${threadId} on ${started.model}` })
   await call('turn/start', { threadId, input: [{ type: 'text', text: req.prompt, text_elements: [] }] })
   const turn = await finished
   out({ type: 'done', threadId, status: turn.status, message: agentText, error: turn.error?.message })
