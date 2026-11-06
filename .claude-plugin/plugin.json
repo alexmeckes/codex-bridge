@@ -1,6 +1,8 @@
 {
   "name": "codex-bridge",
-  "version": "0.2.1",
-  "description": "Lets Claude delegate coding tasks to OpenAI Codex through the Codex app server. Desktop capture is temporarily disabled.",
-  "author": { "name": "Alex" }
+  "version": "0.2.2",
+  "description": "Lets Claude delegate coding and authorized Computer Use tasks to OpenAI Codex with orderly server cleanup.",
+  "author": {
+    "name": "Alex"
+  }
 }

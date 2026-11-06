@@ -1,14 +1,8 @@
 import { spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
 
-// Keep bridge calls out of the macOS capture path until the upstream stream
-// lifecycle issue is resolved. CLI overrides also protect resumed threads.
-export const serverArgs = [
-  '--disable', 'computer_use',
-  '-c', 'plugins."computer-use@openai-bundled".enabled=false',
-  '-c', 'plugins."unified-computer-use@openai-bundled".enabled=false',
-  'app-server',
-]
+// Respect the user's Codex Computer Use settings; retain orderly shutdown below.
+export const serverArgs = ['app-server']
 
 const wait = (promise, ms) => new Promise(resolve => {
   const timer = setTimeout(() => resolve(false), ms)

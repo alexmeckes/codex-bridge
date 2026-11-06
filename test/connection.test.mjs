@@ -34,13 +34,11 @@ function launch(t, scenario, binary = resolve('test/fixtures/mock-codex.mjs')) {
  return { child, done, until }
 }
 
-test('completion disables capture, unsubscribes and waits for server EOF exit', async t => {
+test('completion respects user settings, unsubscribes and waits for server EOF exit', async t => {
  const b = launch(t, 'complete'), { code, result, events } = await b.done()
  assert.equal(code, 0); assert.equal(result.status, 'completed'); assert.equal(result.message, 'OK')
  const args = events[0].args
- assert.deepEqual(args.slice(0,2), ['--disable','computer_use'])
- assert.ok(args.includes('plugins."computer-use@openai-bundled".enabled=false'))
- assert.ok(args.includes('plugins."unified-computer-use@openai-bundled".enabled=false'))
+ assert.deepEqual(args, ['app-server'])
  assert.ok(events.some(e => e.method === 'thread/unsubscribe'))
  assert.equal(events.at(-1).event, 'eof')
  assert.ok(!events.some(e => e.event === 'signal'))

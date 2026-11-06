@@ -14,8 +14,8 @@ export const register: Register = on => {
       isDeferred: false,
       description:
         'Delegate a task to OpenAI Codex (runs one Codex turn via `codex app-server` and returns its final reply). ' +
-        'Desktop Computer Use is temporarily disabled while investigating a macOS capture crash. ' +
-        'Use this tool for coding and command-line tasks. Approval requests default to decline; ' +
+        'Desktop Computer Use is available when enabled in the user’s Codex settings. ' +
+        'Use this tool for coding, command-line, and authorized desktop tasks. Approval requests default to decline; ' +
         'use accept only for actions the user authorized. ' +
         'Pass threadId from a previous result to continue the same Codex conversation.',
       inputSchema: {

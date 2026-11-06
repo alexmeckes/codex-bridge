@@ -1,6 +1,6 @@
 # codex-bridge
 
-A Claude Code mod that gives Claude a `codex` tool: it hands a task to [OpenAI Codex](https://github.com/openai/codex) and returns Codex's reply. **Desktop Computer Use is temporarily disabled** while investigating macOS capture-resource exhaustion. Coding and command-line delegation remain available.
+A Claude Code mod that gives Claude a `codex` tool: it hands a task to [OpenAI Codex](https://github.com/openai/codex) and returns Codex's reply. Desktop Computer Use follows your Codex settings; coding and command-line delegation are also available.
 
 Each call starts `codex app-server`, runs one Codex turn over its JSON-RPC protocol (`bin/codex-turn.mjs`), and returns the final message, a `threadId` for continuing the same Codex thread, and a list of the steps Codex took. While Codex works, its current step shows in Claude Code's status line. On cancellation, the bridge requests a turn interrupt and waits for cleanup before closing its owned server.
 
@@ -52,7 +52,7 @@ Codex can ask the client before commands or edits. The bridge cannot forward tho
 
 ## Capture mitigation and shutdown
 
-Every bridge server starts with Computer Use and both desktop-control plugins disabled by explicit command-line overrides. This also applies when resuming a thread. This is a temporary mitigation, not proof that the upstream graphics leak has been fixed.
+The bridge inherits your Codex Computer Use settings. Version 0.2.2 removes the temporary capture-disable overrides from 0.2.1 while retaining the shutdown fixes. This does not establish that the upstream macOS capture-resource leak is fixed; if crashes return, disable Computer Use again while investigating.
 
 Normal completion unsubscribes the thread and closes server input, then waits for exit. SIGINT, SIGTERM and SIGHUP first interrupt the active turn and wait for its completion event. If shutdown stalls, bounded termination targets only the child server owned by that invocation. It never kills shared capture helpers or unrelated Codex sessions. An uncatchable SIGKILL cannot run the bridge's cleanup handler.
 
