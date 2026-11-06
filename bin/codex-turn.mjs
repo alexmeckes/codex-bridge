@@ -2,26 +2,16 @@
 // Runs one Codex turn through `codex app-server` (JSON-RPC over stdio).
 // stdin: {"prompt", "threadId"?, "cwd"?, "model"? (default gpt-6.1-terra), "approvals"?: "decline" | "accept"}
 // stdout: JSON lines — {"type":"progress","text"} while working, then {"type":"done",...}.
-import { spawn } from 'node:child_process'
+import { connect } from './connection.mjs'
 import { randomUUID } from 'node:crypto'
-import { createInterface } from 'node:readline'
 
 const req = JSON.parse(await new Promise(r => { let s = ''; process.stdin.on('data', d => (s += d)).on('end', () => r(s)) }))
-const out = o => process.stdout.write(JSON.stringify(o) + '\n')
+const out = o => { if (!process.stdout.destroyed) process.stdout.write(JSON.stringify(o) + '\n') }
 const PROJECT = 'Claude Code'
 const debug = process.env.CODEX_BRIDGE_DEBUG === '1'
 
-const server = spawn(process.env.CODEX_BIN || 'codex', ['app-server'], { stdio: ['pipe', 'pipe', 'inherit'] })
-server.on('exit', code => { out({ type: 'done', status: 'failed', error: `codex app-server exited (${code})` }); process.exit(1) })
-
-let nextId = 1
-const pending = new Map()
-const send = msg => server.stdin.write(JSON.stringify(msg) + '\n')
-const call = (method, params) => new Promise((resolve, reject) => {
-  const id = nextId++
-  pending.set(id, { resolve, reject })
-  send({ id, method, params })
-})
+const connection = connect({ onRequest: answerServerRequest, onNotification: notification, progress: text => out({ type: 'progress', text }), debug })
+const { call, send } = connection
 
 let threadId, agentText = '', turnDone
 const finished = new Promise(r => (turnDone = r))
@@ -55,22 +45,14 @@ function describe(item) {
   }
 }
 
-createInterface({ input: server.stdout }).on('line', line => {
-  if (!line.trim()) return
-  const msg = JSON.parse(line)
-  if (debug) process.stderr.write(line + '\n')
-  if (msg.id !== undefined && msg.method) return answerServerRequest(msg)
-  if (msg.id !== undefined) {
-    const p = pending.get(msg.id); pending.delete(msg.id)
-    return msg.error ? p.reject(new Error(msg.error.message)) : p.resolve(msg.result)
-  }
+function notification(msg) {
   const { method, params } = msg
   if (params?.threadId && threadId && params.threadId !== threadId) return
   if (method === 'item/started') { const t = describe(params.item); if (t) out({ type: 'progress', text: t }) }
   if (method === 'item/completed' && params.item.type === 'agentMessage') agentText = params.item.text
   if (method === 'turn/completed') turnDone(params.turn)
   if (method === 'error') out({ type: 'progress', text: `error: ${params.error?.message ?? JSON.stringify(params)}` })
-})
+}
 
 // Every new thread lands in one project, found by name and created if it's missing.
 async function projectId() {
@@ -85,25 +67,28 @@ async function projectId() {
   return project.id
 }
 
+let result
 try {
-  await call('initialize', { clientInfo: { name: 'claude-codex-bridge', title: 'Claude Code', version: '0.1.0' }, capabilities: { experimentalApi: true, requestAttestation: false } })
-  send({ method: 'initialized' })
-  const cwd = req.cwd ?? process.cwd()
-  let started
-  if (req.threadId) {
-    // A resumed thread keeps its own model and project unless a model is named.
-    started = await call('thread/resume', { threadId: req.threadId, cwd, ...(req.model && { model: req.model }) })
-  } else {
-    started = await call('thread/start', { cwd, model: req.model ?? 'gpt-6.1-terra', projectId: await projectId() })
-  }
-  threadId = started.thread.id
-  out({ type: 'progress', text: `thread ${threadId} on ${started.model}` })
-  await call('turn/start', { threadId, input: [{ type: 'text', text: req.prompt, text_elements: [] }] })
-  const turn = await finished
-  out({ type: 'done', threadId, status: turn.status, message: agentText, error: turn.error?.message })
+  result = await connection.run(async () => {
+    await call('initialize', { clientInfo: { name: 'claude-codex-bridge', title: 'Claude Code', version: '0.1.0' }, capabilities: { experimentalApi: true, requestAttestation: false } })
+    send({ method: 'initialized' })
+    const cwd = req.cwd ?? process.cwd()
+    let started
+    if (req.threadId) {
+      // A resumed thread keeps its own model and project unless a model is named.
+      started = await call('thread/resume', { threadId: req.threadId, cwd, ...(req.model && { model: req.model }) })
+    } else {
+      started = await call('thread/start', { cwd, model: req.model ?? 'gpt-6.1-terra', projectId: await projectId() })
+    }
+    threadId = started.thread.id
+    out({ type: 'progress', text: `thread ${threadId} on ${started.model}` })
+    await call('turn/start', { threadId, input: [{ type: 'text', text: req.prompt, text_elements: [] }] })
+    const turn = await finished
+    return { threadId, status: turn.status, message: agentText, error: turn.error?.message }
+  })
 } catch (err) {
-  out({ type: 'done', threadId, status: 'failed', error: String(err.message ?? err) })
+  result = { threadId, status: err.code === 'BRIDGE_INTERRUPTED' ? 'interrupted' : 'failed', error: String(err.message ?? err) }
 }
-server.removeAllListeners('exit')
-server.kill()
-process.exit(0)
+// Flush the result only after our server has exited. Do not truncate stdout.
+out({ type: 'done', ...result })
+process.exitCode = result.status === 'completed' ? 0 : 1

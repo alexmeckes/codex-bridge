@@ -14,10 +14,9 @@ export const register: Register = on => {
       isDeferred: false,
       description:
         'Delegate a task to OpenAI Codex (runs one Codex turn via `codex app-server` and returns its final reply). ' +
-        'Codex has Computer Use: it can see and operate native macOS apps (click, type, read the screen). ' +
-        'For a desktop GUI task, say so plainly in the prompt, e.g. "Use Computer Use to ...". ' +
-        'Computer Use asks for access to each app; those asks are declined unless approvals is "accept", ' +
-        'so pass "accept" only when the user asked for Codex to act on their computer. ' +
+        'Desktop Computer Use is temporarily disabled while investigating a macOS capture crash. ' +
+        'Use this tool for coding and command-line tasks. Approval requests default to decline; ' +
+        'use accept only for actions the user authorized. ' +
         'Pass threadId from a previous result to continue the same Codex conversation.',
       inputSchema: {
         type: 'object',
